@@ -1,0 +1,20 @@
+# Flutter and Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+coverage/
+
+# Generated Android build state
+android/.gradle/
+android/local.properties
+android/key.properties
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.iml
+.DS_Store
