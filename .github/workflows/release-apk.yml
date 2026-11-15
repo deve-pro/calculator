@@ -2,13 +2,18 @@ name: Build and publish Android APK
 
 on:
   push:
+    branches:
+      - '**'
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       tag_name:
-        description: Release tag to create or update (for example v1.0.0)
-        required: true
+        description: Optional release tag to create or update (for example v1.0.0)
+        required: false
         type: string
 
 permissions:
@@ -20,7 +25,7 @@ concurrency:
 
 jobs:
   build-and-release:
-    name: Build APK and attach it to a GitHub Release
+    name: Build APK and publish when tagged
     runs-on: ubuntu-latest
 
     steps:
@@ -59,7 +64,16 @@ jobs:
       - name: Verify APK
         run: test -s build/app/outputs/flutter-apk/app-release.apk
 
+      - name: Upload APK as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calculator-apk-${{ github.run_number }}-${{ github.run_attempt }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Create or update GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name != '')
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

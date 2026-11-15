@@ -20,7 +20,7 @@ flutter build apk --release
 
 The APK is written to `build/app/outputs/flutter-apk/app-release.apk`.
 
-## Publish an APK to a GitHub Release
+## Build and publish an APK
 
 Push a version tag to this repository:
 
@@ -29,6 +29,6 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-The **Build and publish Android APK** workflow generates the Android project files, runs `flutter analyze` and the tests, builds the release APK, then creates or updates a GitHub Release for that tag and attaches `app-release.apk`. You can also start the workflow from **Actions → Build and publish Android APK → Run workflow** and enter a release tag.
+The **Build and publish Android APK** workflow runs on branch pushes and pull requests to `main`. It generates the Android project files, runs `flutter analyze` and the tests, builds the release APK, and uploads it as a downloadable workflow artifact (`calculator-apk-*`, retained for 30 days). Push a `v*` tag to also create or update a GitHub Release and attach `app-release.apk`. You can start it manually from **Actions → Build and publish Android APK → Run workflow**; leave the release tag empty to build an artifact only, or enter a tag to publish a release.
 
 The workflow uses Flutter's default Android signing configuration. Configure a production keystore and GitHub secrets separately before distributing updates through Google Play.
