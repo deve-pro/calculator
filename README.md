@@ -4,7 +4,7 @@ A responsive calculator app written in Flutter. It supports the four basic opera
 
 ## Run locally
 
-Install the Flutter stable SDK, then generate the Android runner once (this repository keeps the Flutter app source and generates platform boilerplate when needed):
+Install Flutter stable 3.47 or newer, then generate the Android runner once (this repository keeps the Flutter app source and generates platform boilerplate when needed):
 
 ```sh
 flutter create --platforms=android --org com.devepro --project-name calculator .
