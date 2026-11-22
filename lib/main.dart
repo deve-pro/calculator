@@ -135,9 +135,9 @@ class _SignInPageState extends State<_SignInPage> {
         await auth.signInWithPassword(email: email, password: password);
       }
     } on AuthException catch (error) {
-      if (mounted) setState(() => _error = error.message);
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Could not complete your request. Please try again.');
+      if (mounted) setState(() => _error = _friendlyAuthError(error.message));
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendlyAuthError(error.toString()));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -269,6 +269,18 @@ class _SignInPageState extends State<_SignInPage> {
       ),
     );
   }
+}
+
+String _friendlyAuthError(String message) {
+  final normalized = message.toLowerCase();
+  if (normalized.contains('failed host lookup') ||
+      normalized.contains('socketexception') ||
+      normalized.contains('clientexception') ||
+      normalized.contains('network is unreachable') ||
+      normalized.contains('connection timed out')) {
+    return 'Can’t connect to the account service. Check your internet connection and try again.';
+  }
+  return message;
 }
 
 InputDecoration _authInputDecoration(String label, IconData icon) => InputDecoration(

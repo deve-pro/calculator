@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add the Supabase OAuth callback intent filter to generated Android scaffolding."""
+"""Configure generated Android scaffolding for Supabase auth and API access."""
 
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -9,6 +9,12 @@ android_ns = "http://schemas.android.com/apk/res/android"
 ET.register_namespace("android", android_ns)
 root = ET.parse(manifest).getroot()
 name = f"{{{android_ns}}}name"
+
+internet_permission = "android.permission.INTERNET"
+if not any(permission.get(name) == internet_permission for permission in root.findall("uses-permission")):
+    application = root.find("application")
+    insert_at = list(root).index(application) if application is not None else len(root)
+    root.insert(insert_at, ET.Element("uses-permission", {name: internet_permission}))
 
 for activity in root.findall(".//activity"):
     if activity.get(name, "").endswith("MainActivity"):
