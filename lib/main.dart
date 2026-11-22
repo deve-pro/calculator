@@ -13,15 +13,18 @@ const _supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: 'https://snirkcljtqpxoaixmwob.supabase.co',
 );
-const _supabaseAnonKey = String.fromEnvironment(
-  'SUPABASE_ANON_KEY',
+const _supabasePublishableKey = String.fromEnvironment(
+  'SUPABASE_PUBLISHABLE_KEY',
   defaultValue: 'sb_publishable_55Wd2TAcM_iImHNn2tAPUw_mbrqA8zI',
 );
 const _mobileAuthRedirect = 'io.supabase.calculator://login-callback/';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey);
+  await Supabase.initialize(
+    url: _supabaseUrl,
+    publishableKey: _supabasePublishableKey,
+  );
   runApp(const CalculatorApp());
 }
 
