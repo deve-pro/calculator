@@ -43,7 +43,7 @@ void main() {
 
     await tester.pumpWidget(const MaterialApp(home: CalculatorPage()));
     await tester.tap(find.text('sin'));
-    await tester.tap(find.text('0'));
+    await tester.tap(find.text('0').last);
     await tester.tap(find.text(')'));
     await tester.tap(find.text('='));
     await tester.pumpAndSettle();
