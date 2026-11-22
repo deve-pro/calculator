@@ -18,10 +18,10 @@ The app is configured to use your Supabase project `snirkcljtqpxoaixmwob` with i
 ```sh
 flutter run \
   --dart-define=SUPABASE_URL=https://your-project.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=your-publishable-key
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
-Only use the Supabase **publishable/anon** key in the app. Never put a Supabase secret or `service_role` key in Flutter source or a client build.
+Only use the Supabase **publishable** key in the app. Never put a Supabase secret or `service_role` key in Flutter source or a client build.
 
 ## Accounts
 
