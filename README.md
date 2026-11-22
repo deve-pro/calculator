@@ -27,7 +27,7 @@ Only use the Supabase **publishable** key in the app. Never put a Supabase secre
 
 Create an account with an email address and password, then sign in with those credentials. Supabase Auth manages the accounts (`auth.users`). Email/password sign-up is enabled in the connected project, and email confirmation is required. New users receive a confirmation link and can sign in after confirming their email. No Google OAuth Client ID or Client Secret is needed.
 
-The app redirects email confirmation back into Android using `io.supabase.calculator://login-callback/`; the build workflow adds the required Android intent filter. For Flutter web, add the deployed app's origin to Supabase Dashboard → **Authentication → URL Configuration → Redirect URLs**. For iOS, register `io.supabase.calculator` as a URL scheme in the Runner target before building there.
+The app redirects email confirmation back into Android using `io.supabase.calculator://login-callback/`; the setup script and Android build workflow add the required internet permission and callback intent filter to the release manifest. For Flutter web, add the deployed app's origin to Supabase Dashboard → **Authentication → URL Configuration → Redirect URLs**. For iOS, register `io.supabase.calculator` as a URL scheme in the Runner target before building there.
 
 ## Tests and builds
 
