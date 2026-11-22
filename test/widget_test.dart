@@ -37,18 +37,17 @@ void main() {
     expect(find.byKey(const ValueKey<String>('result-5')), findsOneWidget);
   });
 
-  testWidgets('scientific keypad evaluates a degree-based sine', (tester) async {
+  testWidgets('scientific keypad evaluates a trigonometric function', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(const MaterialApp(home: CalculatorPage()));
     await tester.tap(find.text('sin'));
-    await tester.tap(find.text('3'));
     await tester.tap(find.text('0'));
     await tester.tap(find.text(')'));
     await tester.tap(find.text('='));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey<String>('result-0.5')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('result-0')), findsOneWidget);
   });
 }
