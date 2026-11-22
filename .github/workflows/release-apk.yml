@@ -49,6 +49,7 @@ jobs:
           flutter create --platforms=android --org com.devepro --project-name calculator "$RUNNER_TEMP/calculator-scaffold"
           mkdir -p android
           cp -R "$RUNNER_TEMP/calculator-scaffold/android/." android/
+          python3 tooling/configure_android_deeplinks.py
 
       - name: Get Flutter dependencies
         run: flutter pub get
