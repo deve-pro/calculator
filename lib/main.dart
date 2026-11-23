@@ -1,8 +1,9 @@
+import 'dart:math';
 import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'calculator_engine.dart';
@@ -19,7 +20,6 @@ const _supabasePublishableKey = String.fromEnvironment(
   'SUPABASE_PUBLISHABLE_KEY',
   defaultValue: 'sb_publishable_55Wd2TAcM_iImHNn2tAPUw_mbrqA8zI',
 );
-const _mobileAuthRedirect = 'io.supabase.calculator://login-callback/';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,239 +47,146 @@ class CalculatorApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: _backgroundColor,
       ),
-      home: const _AuthGate(),
+      home: const _DeviceAccountGate(),
     );
   }
 }
 
-class _AuthGate extends StatelessWidget {
-  const _AuthGate();
+class _DeviceAccountGate extends StatefulWidget {
+  const _DeviceAccountGate();
 
   @override
-  Widget build(BuildContext context) {
-    final auth = Supabase.instance.client.auth;
-    return StreamBuilder<AuthState>(
-      stream: auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        final session = snapshot.data?.session ?? auth.currentSession;
-        if (session == null) return const _SignInPage();
-        return CalculatorPage(
-          userEmail: session.user.email,
-          onSignOut: () => Supabase.instance.client.auth.signOut(),
-        );
-      },
-    );
-  }
+  State<_DeviceAccountGate> createState() => _DeviceAccountGateState();
 }
 
-class _SignInPage extends StatefulWidget {
-  const _SignInPage();
+class _DeviceAccountGateState extends State<_DeviceAccountGate> {
+  SharedPreferences? _preferences;
+  String? _deviceAccountId;
+  bool _countOptedIn = false;
+  bool _ready = false;
 
   @override
-  State<_SignInPage> createState() => _SignInPageState();
-}
-
-class _SignInPageState extends State<_SignInPage> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _loading = false;
-  bool _creatingAccount = false;
-  bool _obscurePassword = true;
-  String? _error;
-  String? _notice;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _loadDeviceAccount();
   }
 
-  Future<void> _submit() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    if (email.isEmpty || !email.contains('@')) {
-      setState(() {
-        _error = 'Enter a valid email address.';
-        _notice = null;
-      });
-      return;
+  Future<void> _loadDeviceAccount() async {
+    final preferences = await SharedPreferences.getInstance();
+    var deviceId = preferences.getString('device_account_id');
+    if (deviceId == null) {
+      deviceId = _newDeviceAccountId();
+      await preferences.setString('device_account_id', deviceId);
     }
-    if (password.length < 6) {
-      setState(() {
-        _error = 'Your password must be at least 6 characters.';
-        _notice = null;
-      });
-      return;
-    }
-
+    final consent = preferences.getBool('share_anonymous_install_count');
+    if (!mounted) return;
     setState(() {
-      _loading = true;
-      _error = null;
-      _notice = null;
+      _preferences = preferences;
+      _deviceAccountId = deviceId;
+      _countOptedIn = consent ?? false;
+      _ready = true;
     });
+    if (consent == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _requestCountConsent());
+    } else if (consent) {
+      _syncInstallCount(deviceId).then((synced) {
+        if (synced) preferences.setBool('counter_removal_pending', false);
+      });
+    } else if (preferences.getBool('counter_removal_pending') == true) {
+      _syncInstallCount(deviceId, remove: true).then((removed) {
+        if (removed) preferences.setBool('counter_removal_pending', false);
+      });
+    }
+  }
+
+  String _newDeviceAccountId() {
+    final random = Random.secure();
+    final hex = List<String>.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
+        '${hex.substring(20, 32)}';
+  }
+
+  Future<void> _requestCountConsent() async {
+    if (!mounted) return;
+    final consent = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('A local device account'),
+        content: const Text(
+          'Your account is created on this device automatically. No email or password is needed. '
+          'Would you also like to include this installation in the public GitHub app counter? '
+          'If you opt in, Sine sends a random installation ID only—not your name, email, or calculator activity. '
+          'You can change this choice later from the account icon.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Include my device'),
+          ),
+        ],
+      ),
+    );
+    if (consent != null) await _setCountConsent(consent);
+  }
+
+  Future<void> _setCountConsent(bool consent) async {
+    final preferences = _preferences;
+    final wasOptedIn = _countOptedIn;
+    await preferences?.setBool('share_anonymous_install_count', consent);
+    if (!consent && wasOptedIn) {
+      await preferences?.setBool('counter_removal_pending', true);
+    }
+    if (!mounted) return;
+    setState(() => _countOptedIn = consent);
+    final deviceId = _deviceAccountId;
+    if (deviceId == null) return;
+
+    if (consent) {
+      final recorded = await _syncInstallCount(deviceId);
+      if (recorded) await preferences?.setBool('counter_removal_pending', false);
+    } else if (wasOptedIn) {
+      final removed = await _syncInstallCount(deviceId, remove: true);
+      if (removed) await preferences?.setBool('counter_removal_pending', false);
+    }
+  }
+
+  Future<bool> _syncInstallCount(String deviceId, {bool remove = false}) async {
     try {
-      final auth = Supabase.instance.client.auth;
-      if (_creatingAccount) {
-        final response = await auth.signUp(
-          email: email,
-          password: password,
-          emailRedirectTo: kIsWeb ? Uri.base.origin : _mobileAuthRedirect,
-        );
-        if (response.session == null && mounted) {
-          setState(() {
-            _notice = 'Check your email for a confirmation link, then sign in.';
-            _creatingAccount = false;
-            _passwordController.clear();
-          });
-        }
-      } else {
-        await auth.signInWithPassword(email: email, password: password);
-      }
-    } on AuthException catch (error) {
-      if (mounted) setState(() => _error = _friendlyAuthError(error.message));
-    } catch (error) {
-      if (mounted) setState(() => _error = _friendlyAuthError(error.toString()));
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      await Supabase.instance.client.rpc(
+        remove ? 'remove_calculator_install' : 'record_calculator_install',
+        params: <String, dynamic>{'p_install_id': deviceId},
+      );
+      return true;
+    } catch (_) {
+      // The calculator remains fully available if the optional counter is offline.
+      return false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _backgroundColor,
-      body: _LiquidGlassBackground(
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: _LiquidGlassSurface(
-                  padding: const EdgeInsets.all(30),
-                  radius: 30,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      Center(
-                        child: Container(
-                          width: 62,
-                          height: 62,
-                          decoration: BoxDecoration(
-                            color: const Color(0x25B9C7D8),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Icon(Icons.functions_rounded, color: _coolAccentColor, size: 32),
-                        ),
-                      ),
-                      const SizedBox(height: 25),
-                      const Text(
-                        'Sine',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -1),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Your scientific workspace,\nready when you are.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Color(0xFFAAAEB5), height: 1.5, fontSize: 15),
-                      ),
-                      const SizedBox(height: 28),
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const <String>[AutofillHints.email],
-                        textInputAction: TextInputAction.next,
-                        decoration: _authInputDecoration('Email address', Icons.email_outlined),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        autofillHints: <String>[_creatingAccount ? AutofillHints.newPassword : AutofillHints.password],
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _submit(),
-                        decoration: _authInputDecoration('Password', Icons.lock_outline_rounded).copyWith(
-                          suffixIcon: IconButton(
-                            tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                          ),
-                        ),
-                      ),
-                      if (_error != null) ...<Widget>[
-                        const SizedBox(height: 14),
-                        Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFD99792), fontSize: 12)),
-                      ],
-                      if (_notice != null) ...<Widget>[
-                        const SizedBox(height: 14),
-                        Text(_notice!, textAlign: TextAlign.center, style: const TextStyle(color: _resultColor, fontSize: 12)),
-                      ],
-                      const SizedBox(height: 18),
-                      FilledButton(
-                        onPressed: _loading ? null : _submit,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _coolAccentColor,
-                          foregroundColor: const Color(0xFF202124),
-                          minimumSize: const Size.fromHeight(54),
-                          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: _loading
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF36383C)))
-                            : Text(_creatingAccount ? 'Create account' : 'Sign in'),
-                      ),
-                      const SizedBox(height: 10),
-                      TextButton(
-                        onPressed: _loading
-                            ? null
-                            : () => setState(() {
-                                  _creatingAccount = !_creatingAccount;
-                                  _error = null;
-                                  _notice = null;
-                                }),
-                        child: Text(_creatingAccount ? 'Already have an account? Sign in' : 'New here? Create an account'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    if (!_ready || _deviceAccountId == null) {
+      return const Scaffold(
+        backgroundColor: _backgroundColor,
+        body: Center(child: CircularProgressIndicator(color: _coolAccentColor)),
+      );
+    }
+    return CalculatorPage(
+      deviceAccountId: _deviceAccountId!,
+      countOptedIn: _countOptedIn,
+      onCountOptInChanged: _setCountConsent,
     );
   }
 }
-
-String _friendlyAuthError(String message) {
-  final normalized = message.toLowerCase();
-  if (normalized.contains('failed host lookup') ||
-      normalized.contains('socketexception') ||
-      normalized.contains('clientexception') ||
-      normalized.contains('network is unreachable') ||
-      normalized.contains('connection timed out')) {
-    return 'Can’t connect to the account service. Check your internet connection and try again.';
-  }
-  return message;
-}
-
-InputDecoration _authInputDecoration(String label, IconData icon) => InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, size: 20),
-      filled: true,
-      fillColor: const Color(0x332A2B2F),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
-        borderSide: const BorderSide(color: Color(0x1FFFFFFF)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
-        borderSide: const BorderSide(color: _coolAccentColor),
-      ),
-    );
 
 class _LiquidGlassBackground extends StatelessWidget {
   const _LiquidGlassBackground({required this.child});
@@ -410,10 +317,16 @@ class _LiquidGlassSurface extends StatelessWidget {
 }
 
 class CalculatorPage extends StatefulWidget {
-  const CalculatorPage({super.key, this.userEmail, this.onSignOut});
+  const CalculatorPage({
+    super.key,
+    this.deviceAccountId = 'local-device',
+    this.countOptedIn = false,
+    this.onCountOptInChanged,
+  });
 
-  final String? userEmail;
-  final VoidCallback? onSignOut;
+  final String deviceAccountId;
+  final bool countOptedIn;
+  final ValueChanged<bool>? onCountOptInChanged;
 
   @override
   State<CalculatorPage> createState() => _CalculatorPageState();
@@ -678,8 +591,9 @@ class _CalculatorPageState extends State<CalculatorPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 _CalculatorHeader(
-                  userEmail: widget.userEmail,
-                  onSignOut: widget.onSignOut,
+                  deviceAccountId: widget.deviceAccountId,
+                  countOptedIn: widget.countOptedIn,
+                  onCountOptInChanged: widget.onCountOptInChanged,
                   scientificMode: _scientificMode,
                   onToggleMode: () => setState(() => _scientificMode = !_scientificMode),
                 ),
@@ -756,14 +670,61 @@ class _CalculatorHeader extends StatelessWidget {
   const _CalculatorHeader({
     required this.scientificMode,
     required this.onToggleMode,
-    this.userEmail,
-    this.onSignOut,
+    required this.deviceAccountId,
+    required this.countOptedIn,
+    required this.onCountOptInChanged,
   });
 
   final bool scientificMode;
   final VoidCallback onToggleMode;
-  final String? userEmail;
-  final VoidCallback? onSignOut;
+  final String deviceAccountId;
+  final bool countOptedIn;
+  final ValueChanged<bool>? onCountOptInChanged;
+
+  Future<void> _showDeviceAccountDialog(BuildContext context) async {
+    var optedIn = countOptedIn;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Device account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text(
+                'This local account belongs to this app installation. It is not linked to an email or password. '
+                'Clearing app data or reinstalling may create a new account.',
+              ),
+              const SizedBox(height: 12),
+              SelectableText('Account ID: $deviceAccountId'),
+              const SizedBox(height: 12),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Include in public install count'),
+                subtitle: const Text(
+                  'Shares only a random installation ID. Turning this off removes it from the count.',
+                ),
+                value: optedIn,
+                onChanged: onCountOptInChanged == null
+                    ? null
+                    : (value) {
+                        setDialogState(() => optedIn = value);
+                        onCountOptInChanged!(value);
+                      },
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -845,12 +806,11 @@ class _CalculatorHeader extends StatelessWidget {
             ),
           ),
         ),
-        if (userEmail != null)
-          IconButton(
-            tooltip: 'Sign out${userEmail!.isEmpty ? '' : ' · $userEmail'}',
-            onPressed: onSignOut,
-            icon: const Icon(Icons.logout_rounded, size: 19, color: Color(0xFFD0D0D6)),
-          ),
+        IconButton(
+          tooltip: 'Device account and privacy',
+          onPressed: () => _showDeviceAccountDialog(context),
+          icon: const Icon(Icons.account_circle_outlined, size: 21, color: Color(0xFFD0D0D6)),
+        ),
       ],
     );
   }
