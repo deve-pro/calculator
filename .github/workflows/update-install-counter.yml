@@ -1,0 +1,65 @@
+name: Update opted-in install counter
+
+on:
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-install-counter
+  cancel-in-progress: false
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Fetch public aggregate count
+        env:
+          SUPABASE_URL: https://snirkcljtqpxoaixmwob.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_55Wd2TAcM_iImHNn2tAPUw_mbrqA8zI
+        run: |
+          count="$(curl --fail --silent --show-error \
+            "$SUPABASE_URL/rest/v1/rpc/calculator_install_count" \
+            -X POST \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H 'Content-Type: application/json' \
+            -d '{}')"
+          COUNT_RESPONSE="$count" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          value = json.loads(os.environ['COUNT_RESPONSE'])
+          if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+              raise SystemExit(f'Unexpected install count response: {value!r}')
+
+          readme = Path('README.md')
+          content = readme.read_text()
+          start = '<!-- INSTALL_COUNT_START -->'
+          end = '<!-- INSTALL_COUNT_END -->'
+          if content.count(start) != 1 or content.count(end) != 1:
+              raise SystemExit('README counter markers missing or duplicated')
+          before, rest = content.split(start, 1)
+          _, after = rest.split(end, 1)
+          readme.write_text(f'{before}{start}\n**{value} opted-in installations**\n{end}{after}')
+          PY
+
+      - name: Commit changed count
+        run: |
+          if git diff --quiet -- README.md; then
+            echo 'README counter is already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add README.md
+          git commit -m 'Update opted-in installation count'
+          git push

@@ -37,6 +37,29 @@ void main() {
     expect(find.byKey(const ValueKey<String>('result-5')), findsOneWidget);
   });
 
+  testWidgets('device account is local and counter sharing is optional', (tester) async {
+    var optedIn = false;
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CalculatorPage(
+          deviceAccountId: '12345678-1234-1234-1234-123456789abc',
+          onCountOptInChanged: (value) => optedIn = value,
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Device account and privacy'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('12345678-1234-1234-1234-123456789abc'), findsOneWidget);
+    expect(find.text('Include in public install count'), findsOneWidget);
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    expect(optedIn, isTrue);
+  });
+
   testWidgets('scientific keypad evaluates a trigonometric function', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
