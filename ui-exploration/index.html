@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111214">
+  <title>Sine · Liquid Glass UI exploration</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #F5F5F7;
+      --muted: #A1A1A6;
+      --accent-blue: #AFC3DF;
+      --result: #D6DFEB;
+      --glass: rgba(255, 255, 255, .075);
+      --glass-strong: rgba(255, 255, 255, .12);
+      --line: rgba(255, 255, 255, .14);
+      --mx: 50%;
+      --my: 30%;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: var(--ink);
+      background: #0B0C0E;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    button { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+    .stage {
+      position: relative;
+      isolation: isolate;
+      width: min(100vw, 440px);
+      height: min(100dvh, 940px);
+      min-height: 650px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.17);
+      border-radius: 42px;
+      background:
+        radial-gradient(ellipse at 2% 8%, rgba(109,122,145,.24), transparent 35%),
+        radial-gradient(ellipse at 94% 42%, rgba(105,130,146,.16), transparent 33%),
+        linear-gradient(153deg, #1A1B1E 0%, #101114 47%, #181A1C 100%);
+      box-shadow: 0 32px 100px rgba(0,0,0,.62), inset 0 1px rgba(255,255,255,.15);
+    }
+    .aurora, .aurora::before, .aurora::after {
+      position: absolute;
+      z-index: -1;
+      inset: -28%;
+      content: "";
+      pointer-events: none;
+      filter: blur(50px);
+      opacity: .56;
+    }
+    .aurora {
+      background: conic-gradient(from 40deg at 45% 50%, transparent 0 22%, rgba(136,152,176,.18) 29%, transparent 38% 59%, rgba(145,158,170,.14) 68%, transparent 76%);
+      animation: drift 22s ease-in-out infinite alternate;
+    }
+    .aurora::before {
+      inset: 13% 7% 28% 36%;
+      background: radial-gradient(ellipse, rgba(143,155,174,.20), transparent 68%);
+      animation: float 15s ease-in-out infinite alternate;
+    }
+    .aurora::after {
+      inset: 37% 36% 5% 8%;
+      background: radial-gradient(ellipse, rgba(120,141,154,.16), transparent 69%);
+      animation: float 19s ease-in-out infinite alternate-reverse;
+    }
+    .grain {
+      position: absolute;
+      z-index: -1;
+      inset: 0;
+      pointer-events: none;
+      opacity: .13;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E");
+      mix-blend-mode: screen;
+    }
+    .phone-content {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: max(13px, env(safe-area-inset-top)) 21px max(11px, env(safe-area-inset-bottom));
+      gap: 14px;
+    }
+    .statusbar {
+      flex: 0 0 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 7px;
+      color: rgba(255,255,255,.9);
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: .01em;
+    }
+    .status-icons { display: flex; align-items: center; gap: 6px; }
+    .status-icons svg { width: 14px; height: 14px; opacity: .9; }
+    .topbar { display: flex; align-items: center; min-height: 50px; gap: 12px; }
+    .brand-mark {
+      width: 42px; height: 42px; flex: 0 0 42px;
+      display: grid; place-items: center;
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 15px;
+      color: #D6E0EC;
+      background: linear-gradient(145deg, rgba(197,210,226,.16), rgba(103,122,146,.10));
+      box-shadow: inset 0 1px rgba(255,255,255,.28), 0 8px 26px rgba(110,132,162,.10);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+    }
+    .brand-mark svg { width: 22px; }
+    .brand-copy { flex: 1; min-width: 0; }
+    .brand-name { font-size: 14px; font-weight: 800; letter-spacing: .18em; }
+    .brand-sub { margin-top: 3px; color: var(--muted); font-size: 10px; letter-spacing: .02em; }
+    .icon-button, .mode-toggle, .angle-toggle {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.065);
+      box-shadow: inset 0 1px rgba(255,255,255,.14), 0 7px 22px rgba(0,0,0,.12);
+      backdrop-filter: blur(20px) saturate(155%);
+      -webkit-backdrop-filter: blur(20px) saturate(155%);
+    }
+    .icon-button {
+      width: 40px; height: 40px; display: grid; place-items: center;
+      padding: 0; border-radius: 14px; color: #D0D0D6; cursor: pointer;
+      transition: transform .2s ease, background .25s ease, border-color .25s ease;
+    }
+    .icon-button:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.27); }
+    .icon-button:active { transform: scale(.92); }
+    .icon-button svg { width: 18px; height: 18px; }
+    .mode-row { display: flex; align-items: center; justify-content: space-between; min-height: 39px; }
+    .eyebrow { color: #98989D; font-size: 9px; font-weight: 750; letter-spacing: .19em; }
+    .mode-toggle {
+      position: relative;
+      display: flex;
+      height: 38px;
+      padding: 3px;
+      border-radius: 15px;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .mode-toggle::before {
+      position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px);
+      content: ""; border: 1px solid rgba(255,255,255,.2); border-radius: 12px;
+      background: linear-gradient(135deg, rgba(157,178,207,.25), rgba(109,135,173,.13));
+      box-shadow: 0 3px 15px rgba(105,132,171,.12), inset 0 1px rgba(255,255,255,.24);
+      transition: transform .32s cubic-bezier(.22,.8,.28,1), background .3s ease;
+    }
+    .stage.standard .mode-toggle::before { transform: translateX(100%); }
+    .mode-option { position: relative; z-index: 1; min-width: 78px; display: grid; place-items: center; padding: 0 10px; color: rgba(242,242,247,.56); font-size: 9px; font-weight: 800; letter-spacing: .12em; transition: color .24s; }
+    .mode-option.active { color: #fff; }
+    .display {
+      position: relative;
+      min-height: 142px;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      padding: 19px 20px 17px;
+      border: 1px solid rgba(255,255,255,.19);
+      border-radius: 26px;
+      background:
+        radial-gradient(120% 100% at var(--mx) var(--my), rgba(255,255,255,.11), transparent 44%),
+        linear-gradient(145deg, rgba(255,255,255,.105), rgba(255,255,255,.035));
+      box-shadow: inset 0 1px rgba(255,255,255,.19), inset 0 -25px 45px rgba(255,255,255,.015), 0 18px 45px rgba(0,0,0,.19);
+      backdrop-filter: blur(30px) saturate(160%);
+      -webkit-backdrop-filter: blur(30px) saturate(160%);
+      transform: translateZ(0);
+    }
+    .display::after {
+      position: absolute; inset: 0; border-radius: inherit; content: ""; pointer-events: none;
+      background: linear-gradient(115deg, transparent 22%, rgba(255,255,255,.07) 42%, transparent 59%);
+      transform: translateX(-125%); animation: glass-shine 8s ease-in-out infinite;
+    }
+    .display-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .label { color: #98989D; font-size: 9px; font-weight: 750; letter-spacing: .17em; }
+    .angle-toggle {
+      min-width: 49px; height: 27px; padding: 0 10px; border-radius: 999px;
+      color: #C6D1DE; font-size: 9px; font-weight: 800; letter-spacing: .13em; cursor: pointer;
+      transition: background .2s, transform .2s;
+    }
+    .angle-toggle:active { transform: scale(.94); }
+    .expression {
+      min-height: 34px; display: flex; align-items: center; justify-content: flex-end;
+      overflow: hidden; color: rgba(245,245,247,.72); font-size: clamp(17px, 5vw, 22px);
+      font-weight: 350; letter-spacing: .02em; white-space: nowrap; text-overflow: ellipsis;
+    }
+    .result-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .result-label { color: #98989D; font-size: 9px; font-weight: 750; letter-spacing: .16em; }
+    .result {
+      overflow: hidden; color: var(--result); font-size: clamp(34px, 10vw, 46px); line-height: 1;
+      font-weight: 500; letter-spacing: -.055em; white-space: nowrap; text-overflow: ellipsis;
+      text-shadow: 0 0 26px rgba(206,219,234,.10);
+      animation: result-pop .3s cubic-bezier(.2,.8,.2,1) both;
+    }
+    .science-keys {
+      display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px;
+      flex: 0 0 auto; max-height: 100px; opacity: 1; transform: translateY(0);
+      overflow: hidden; transition: max-height .38s cubic-bezier(.2,.8,.2,1), opacity .25s ease, transform .35s ease, margin .35s ease;
+    }
+    .stage.standard .science-keys { max-height: 0; opacity: 0; transform: translateY(-8px); margin-top: -14px; pointer-events: none; }
+    .scientific-group { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
+    .key {
+      position: relative; isolation: isolate; min-width: 0; overflow: hidden;
+      display: grid; place-items: center; padding: 0;
+      border: 1px solid rgba(255,255,255,.105); border-radius: 17px;
+      color: #F5F5F7;
+      background: linear-gradient(145deg, rgba(255,255,255,.105), rgba(255,255,255,.038));
+      box-shadow: inset 0 1px rgba(255,255,255,.14), 0 7px 19px rgba(0,0,0,.12);
+      backdrop-filter: blur(18px) saturate(150%);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
+      cursor: pointer;
+      transition: transform .15s cubic-bezier(.2,.8,.2,1), background .2s, border-color .2s, box-shadow .2s;
+    }
+    .key::before {
+      position: absolute; z-index: -1; inset: -60%; content: ""; opacity: 0;
+      background: radial-gradient(circle at var(--mx) var(--my), rgba(255,255,255,.42), transparent 34%);
+      transition: opacity .2s;
+    }
+    .key:hover { border-color: rgba(255,255,255,.25); background-color: rgba(255,255,255,.12); }
+    .key:hover::before { opacity: .7; }
+    .key:active, .key.pressed { transform: scale(.92); background: rgba(160,181,210,.17); border-color: rgba(180,198,221,.34); box-shadow: inset 0 1px rgba(255,255,255,.26), 0 0 24px rgba(139,161,191,.12); }
+    .key span { position: relative; pointer-events: none; font-size: 17px; font-weight: 520; }
+    .key.sci { height: 39px; border-radius: 13px; color: #BBCBDD; }
+    .key.sci span { font-size: 11px; font-weight: 700; }
+    .key.operator { color: #E0A967; background: linear-gradient(145deg, rgba(213,158,91,.15), rgba(181,129,70,.08)); }
+    .key.utility { color: #D0D0D6; background: rgba(255,255,255,.105); }
+    .key.equals {
+      border-color: rgba(255,206,156,.42);
+      color: #211D18;
+      background: linear-gradient(140deg, #DDAA72, #BB8049);
+      box-shadow: inset 0 1px rgba(255,255,255,.36), 0 8px 22px rgba(184,129,75,.16);
+    }
+    .key.equals span { font-size: 22px; font-weight: 650; }
+    .key-grid { flex: 0 0 43%; min-height: 250px; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); grid-template-rows: repeat(5, minmax(0,1fr)); gap: 9px; transition: flex-basis .35s ease; }
+    .stage.standard .key-grid { flex-basis: 54%; gap: 10px; }
+    .stage.standard .key-grid .key { border-radius: 20px; }
+    .stage.standard .key-grid .key span { font-size: 21px; }
+    .stage.standard .key-grid .key.equals span { font-size: 25px; }
+    .gesture { width: 108px; height: 4px; margin: 1px auto 0; flex: 0 0 4px; border-radius: 9px; background: rgba(255,255,255,.65); box-shadow: 0 0 9px rgba(255,255,255,.16); }
+    .toast {
+      position: absolute; z-index: 10; left: 50%; bottom: 48px; transform: translate(-50%, 20px);
+      padding: 10px 16px; border: 1px solid rgba(255,255,255,.2); border-radius: 99px;
+      color: white; background: rgba(39,40,43,.82); box-shadow: 0 8px 28px rgba(0,0,0,.27);
+      backdrop-filter: blur(22px); font-size: 11px; opacity: 0; pointer-events: none;
+      transition: opacity .22s ease, transform .22s ease; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    @keyframes drift { from { transform: rotate(-8deg) scale(1); } to { transform: rotate(13deg) scale(1.1) translate3d(2%, -2%, 0); } }
+    @keyframes float { from { transform: translate3d(-2%, 2%, 0) scale(.94); } to { transform: translate3d(4%, -4%, 0) scale(1.1); } }
+    @keyframes glass-shine { 0%, 34% { transform: translateX(-125%); } 62%, 100% { transform: translateX(125%); } }
+    @keyframes result-pop { from { opacity: .55; transform: translateY(7px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @media (max-height: 760px) {
+      .phone-content { gap: 9px; padding-top: 8px; padding-bottom: 8px; }
+      .display { min-height: 118px; padding: 14px 17px; }
+      .key-grid { min-height: 220px; }
+      .key { border-radius: 14px; }
+      .key.sci { height: 34px; }
+      .science-keys, .scientific-group { gap: 6px; }
+    }
+    @media (max-width: 480px) {
+      .stage { width: 100vw; height: 100dvh; min-height: 570px; border: 0; border-radius: 0; box-shadow: none; }
+      .phone-content { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" id="stage" aria-label="Sine calculator liquid glass UI prototype">
+    <div class="aurora"></div>
+    <div class="grain"></div>
+    <div class="phone-content">
+      <div class="statusbar" aria-hidden="true">
+        <span>9:41 <span style="opacity:.55">•</span> Mon, Nov 23</span>
+        <span class="status-icons">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M2 7.5C6 4 14 4 18 7.5M4.5 10c3-2.5 8-2.5 11 0M7.5 13c1.5-1.2 3.5-1.2 5 0M10 16h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 16h2V9H3v7Zm4 0h2V6H7v10Zm4 0h2V3h-2v13Zm4 0h2V1h-2v15Z"/></svg>
+          <svg viewBox="0 0 22 16" fill="none"><rect x="1" y="2" width="17" height="12" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M20 6v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3.5" y="4.5" width="10.5" height="7" rx="1.5" fill="currentColor"/></svg>
+          <span style="font-size:10px;font-weight:600">84%</span>
+        </span>
+      </div>
+
+      <header class="topbar">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 7.3 12 4l7 3.3v9.4L12 20l-7-3.3V7.3Z" stroke="currentColor" stroke-width="1.5"/><path d="m8.2 14.8 3.8-7 3.8 7m-6.2-2.4h4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="brand-copy"><div class="brand-name">SINE</div><div class="brand-sub">A little clarity in every calculation</div></div>
+        <button class="icon-button" id="historyButton" aria-label="View recent calculations" title="Recent calculations">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3.8 11.5a8.2 8.2 0 1 0 2.4-5.8L4 8m0-4v4h4m4-2v6l4 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </header>
+
+      <div class="mode-row">
+        <span class="eyebrow" id="modeCaption">SCIENTIFIC MODE</span>
+        <button class="mode-toggle" id="modeToggle" aria-label="Switch calculator mode" aria-pressed="true">
+          <span class="mode-option active" data-mode="scientific">SCIENTIFIC</span>
+          <span class="mode-option" data-mode="standard">STANDARD</span>
+        </button>
+      </div>
+
+      <section class="display" id="displayCard" aria-label="Calculator display">
+        <div class="display-top">
+          <span class="label">EXPRESSION</span>
+          <button class="angle-toggle" id="angleToggle" aria-label="Toggle degrees and radians">DEG</button>
+        </div>
+        <div class="expression" id="expression">sin(45)</div>
+        <div class="result-row">
+          <span class="result-label">RESULT</span>
+          <output class="result" id="result">0.7071</output>
+        </div>
+      </section>
+
+      <section class="science-keys" id="scienceKeys" aria-label="Scientific function keys">
+        <div class="scientific-group">
+          <button class="key sci" data-key="sin"><span>sin</span></button>
+          <button class="key sci" data-key="cos"><span>cos</span></button>
+          <button class="key sci" data-key="tan"><span>tan</span></button>
+          <button class="key sci" data-key="ln"><span>ln</span></button>
+          <button class="key sci" data-key="log"><span>log</span></button>
+        </div>
+        <div class="scientific-group">
+          <button class="key sci" data-key="sqrt"><span>√</span></button>
+          <button class="key sci" data-key="square"><span>x²</span></button>
+          <button class="key sci" data-key="power"><span>xʸ</span></button>
+          <button class="key sci" data-key="pi"><span>π</span></button>
+          <button class="key sci" data-key="e"><span>e</span></button>
+        </div>
+      </section>
+
+      <section class="key-grid" id="keyGrid" aria-label="Calculator keypad"></section>
+      <div class="gesture" aria-hidden="true"></div>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+    const stage = document.querySelector('#stage');
+    const keyGrid = document.querySelector('#keyGrid');
+    const expressionNode = document.querySelector('#expression');
+    const resultNode = document.querySelector('#result');
+    const modeCaption = document.querySelector('#modeCaption');
+    const angleToggle = document.querySelector('#angleToggle');
+    const toast = document.querySelector('#toast');
+    let scientific = true;
+    let degrees = true;
+    let expression = 'sin(45)';
+    let result = '0.7071';
+    let freshDemo = true;
+    let toastTimer;
+    const keys = {
+      standard: [
+        ['AC','utility'], ['⌫','utility'], ['%','utility'], ['÷','operator'],
+        ['7','number'], ['8','number'], ['9','number'], ['×','operator'],
+        ['4','number'], ['5','number'], ['6','number'], ['−','operator'],
+        ['1','number'], ['2','number'], ['3','number'], ['+','operator'],
+        ['00','number'], ['0','number'], ['.','number'], ['=','equals']
+      ],
+      scientific: [
+        ['(', 'utility'], [')','utility'], ['!','utility'], ['AC','utility'],
+        ['7','number'], ['8','number'], ['9','number'], ['÷','operator'],
+        ['4','number'], ['5','number'], ['6','number'], ['×','operator'],
+        ['1','number'], ['2','number'], ['3','number'], ['−','operator'],
+        ['00','number'], ['0','number'], ['.','number'], ['=','equals']
+      ]
+    };
+
+    function renderKeys() {
+      const rows = scientific ? keys.scientific : keys.standard;
+      keyGrid.innerHTML = rows.map(([label, tone]) => `<button class="key ${tone}" data-key="${label}" aria-label="${label === '⌫' ? 'Delete' : label}"><span>${label === '⌫' ? '⌫' : label}</span></button>`).join('');
+    }
+    function paint() {
+      expressionNode.textContent = expression || '0';
+      resultNode.textContent = result;
+      resultNode.style.animation = 'none';
+      void resultNode.offsetWidth;
+      resultNode.style.animation = '';
+    }
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1700);
+    }
+    function safeCalculate(source) {
+      if (!source || !/^[0-9+\-−×÷*/().%!\sπa-z]+$/i.test(source)) return null;
+      let code = source
+        .replaceAll('−', '-')
+        .replaceAll('×', '*')
+        .replaceAll('÷', '/')
+        .replaceAll('π', 'Math.PI')
+        .replace(/\be\b/g, 'Math.E')
+        .replace(/\^/g, '**');
+      code = code.replace(/(sin|cos|tan|sqrt|ln|log)\(([^()]*)\)/gi, (_, name, arg) => {
+        const n = Number(arg);
+        if (!Number.isFinite(n)) return 'NaN';
+        const fn = name.toLowerCase();
+        if (fn === 'sin') return `Math.sin(${degrees ? n * Math.PI / 180 : n})`;
+        if (fn === 'cos') return `Math.cos(${degrees ? n * Math.PI / 180 : n})`;
+        if (fn === 'tan') return `Math.tan(${degrees ? n * Math.PI / 180 : n})`;
+        if (fn === 'sqrt') return `Math.sqrt(${n})`;
+        if (fn === 'ln') return `Math.log(${n})`;
+        return `Math.log10(${n})`;
+      });
+      code = code.replace(/(\d+(?:\.\d+)?)%/g, '($1/100)');
+      if (!/^[0-9+\-*/().\sA-Za-z]+$/.test(code)) return null;
+      try {
+        const value = Function(`"use strict"; return (${code})`)();
+        if (!Number.isFinite(value)) return null;
+        return Number(value.toPrecision(8)).toString();
+      } catch (_) { return null; }
+    }
+    function evaluate() {
+      const next = safeCalculate(expression);
+      if (next === null) {
+        result = '—';
+        showToast('Check the expression');
+      } else {
+        expression = next;
+        result = next;
+      }
+      paint();
+    }
+    function press(key) {
+      if (key !== 'DEG' && freshDemo) {
+        expression = '';
+        result = '0';
+        freshDemo = false;
+      }
+      if (key === 'AC') {
+        freshDemo = false;
+        expression = '';
+        result = '0';
+      } else if (key === '⌫') {
+        expression = expression.slice(0, -1);
+        result = safeCalculate(expression) ?? '—';
+      } else if (key === '=') {
+        evaluate();
+        return;
+      } else if (key === '%') {
+        expression += '%';
+        result = safeCalculate(expression) ?? '—';
+      } else if (key === 'sin' || key === 'cos' || key === 'tan' || key === 'ln' || key === 'log') {
+        if (/[0-9.)!πe%]$/.test(expression)) expression += '×';
+        expression += `${key}(`;
+        result = '—';
+      } else if (key === 'sqrt') {
+        if (/[0-9.)!πe%]$/.test(expression)) expression += '×';
+        expression += 'sqrt(';
+        result = '—';
+      } else if (key === 'square') {
+        expression += '^2';
+        result = safeCalculate(expression) ?? '—';
+      } else if (key === 'power') {
+        expression += '^';
+        result = '—';
+      } else if (key === 'pi' || key === 'e') {
+        if (/[0-9.)!πe%]$/.test(expression)) expression += '×';
+        expression += key === 'pi' ? 'π' : 'e';
+        result = safeCalculate(expression) ?? '—';
+      } else if (key === 'DEG') {
+        degrees = !degrees;
+        angleToggle.textContent = degrees ? 'DEG' : 'RAD';
+        showToast(degrees ? 'Degrees' : 'Radians');
+      } else if (/^\d/.test(key) || key === '.') {
+        if (/[)πe%!]/.test(expression.slice(-1))) expression += '×';
+        expression += key;
+        result = safeCalculate(expression) ?? '—';
+      } else {
+        expression += key;
+        result = safeCalculate(expression) ?? '—';
+      }
+      paint();
+    }
+
+    renderKeys();
+    paint();
+    document.addEventListener('click', event => {
+      const key = event.target.closest('[data-key]');
+      if (key) {
+        key.classList.add('pressed');
+        setTimeout(() => key.classList.remove('pressed'), 180);
+        press(key.dataset.key);
+      }
+    });
+    document.querySelector('#modeToggle').addEventListener('click', event => {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      scientific = event.clientX < bounds.left + bounds.width / 2;
+      stage.classList.toggle('standard', !scientific);
+      event.currentTarget.setAttribute('aria-pressed', String(scientific));
+      document.querySelectorAll('.mode-option').forEach(option => option.classList.toggle('active', option.dataset.mode === (scientific ? 'scientific' : 'standard')));
+      modeCaption.textContent = scientific ? 'SCIENTIFIC MODE' : 'STANDARD MODE';
+      document.querySelector('#scienceKeys').setAttribute('aria-hidden', String(!scientific));
+      renderKeys();
+    });
+    angleToggle.addEventListener('click', () => press('DEG'));
+    document.querySelector('#historyButton').addEventListener('click', () => showToast('Your recent calculations will appear here'));
+    document.addEventListener('pointermove', event => {
+      const bounds = stage.getBoundingClientRect();
+      const x = `${((event.clientX - bounds.left) / bounds.width) * 100}%`;
+      const y = `${((event.clientY - bounds.top) / bounds.height) * 100}%`;
+      stage.style.setProperty('--mx', x);
+      stage.style.setProperty('--my', y);
+    }, { passive: true });
+  </script>
+</body>
+</html>
